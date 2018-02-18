@@ -13,7 +13,7 @@ public interface ArgsArrayCommand extends Command {
     }
 
     @Override
-    default void run(CommandInfo info, String argument) throws IOException {
+    default void run(String command, String argument) throws IOException {
         run(argument.split("\\s+"));
     }
 

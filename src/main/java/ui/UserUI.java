@@ -1,8 +1,8 @@
 package ui;
 
-import com.sun.deploy.uitoolkit.impl.fx.ui.FXMessageDialog;
 import extensions.FxDialogs;
 import impl.FTPServer;
+import impl.ServerFileSystem;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 
@@ -11,13 +11,16 @@ import javafx.scene.control.cell.TextFieldTreeCell;
 import api.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.ResourceBundle;
 import java.util.regex.Pattern;
 
 public class UserUI implements Initializable {
 
     private FTPServer ftpServerInstance;
+    private ServerFileSystem fileSystem;
 
     @FXML
     private TreeView<String> treeView;
@@ -39,15 +42,15 @@ public class UserUI implements Initializable {
 
 
     @FXML
-    private void displayTreeView(String inputDirectoryLocation) {
-        TreeItem<String> rootItem = new TreeItem<>(inputDirectoryLocation.substring(inputDirectoryLocation.lastIndexOf("/") + 1));
+    private void displayTreeView() throws IOException {
+        File root = fileSystem.getRoot();
 
+        TreeItem<String> rootItem = new TreeItem<>(root.getName());
         treeView.setShowRoot(true);
 
         treeView.setCellFactory(TextFieldTreeCell.forTreeView());
 
-        File fileInputDirectoryLocation = new File(inputDirectoryLocation);
-        File fileList[] = fileInputDirectoryLocation.listFiles();
+        ArrayList<File> fileList = fileSystem.listFiles(root);
 
 
         for (File file : fileList) {
@@ -58,23 +61,28 @@ public class UserUI implements Initializable {
     }
 
     @FXML
-    private void createTree(File file, TreeItem<String> parent) {
-        if (file.isDirectory()) {
-            TreeItem<String> treeItem = new TreeItem<>(file.getName());
+    private void createTree(File file, TreeItem<String> parent) throws IOException {
+        if (fileSystem.isDirectory(file)) {
+            TreeItem<String> treeItem = new TreeItem<>(fileSystem.getName(file));
             parent.getChildren().add(treeItem);
-            for (File f : file.listFiles()) {
+            for (File f : fileSystem.listFiles(file)) {
                 if (!f.toString().contains("/.DS_Store")) {
                     createTree(f, treeItem);
                 }
             }
         } else {
-            parent.getChildren().add(new TreeItem<>(file.getName()));
+            parent.getChildren().add(new TreeItem<>(fileSystem.getName(file)));
         }
     }
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        displayTreeView(homeDir);
+        fileSystem = new ServerFileSystem(new File(homeDir));
+        try {
+            displayTreeView();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         log.textProperty().bind(Logger.logDataProperty());
     }
 

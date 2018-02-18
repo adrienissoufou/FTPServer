@@ -1,6 +1,5 @@
 package api.iComand;
 
-import javax.activation.CommandInfo;
 import java.io.IOException;
 
 public interface NoArgsCommand extends Command {
@@ -13,7 +12,7 @@ public interface NoArgsCommand extends Command {
     }
 
     @Override
-    default void run(CommandInfo info, String argument) throws IOException {
+    default void run(String command, String argument) throws IOException {
         run();
     }
 

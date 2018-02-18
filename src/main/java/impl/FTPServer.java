@@ -1,13 +1,18 @@
 package impl;
 
 import api.Logger;
+import api.iComand.ArgsArrayCommand;
+import api.iComand.Command;
+import api.iComand.NoArgsCommand;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class FTPServer {
 
@@ -26,11 +31,11 @@ public class FTPServer {
         try {
             socket = new ServerSocket(port, 50, InetAddress.getLocalHost());
             isRunning = true;
+            Logger.setLogData("Server address is: " +  InetAddress.getLocalHost().toString() + ":" + port);
         } catch (IOException e) {
             Logger.setLogData("Socket error: " + e.getMessage());
             System.exit(-1);
         }
-        Logger.setLogData("Server is running on port " + port);
         acceptConnections();
     }
 
@@ -56,5 +61,11 @@ public class FTPServer {
     Boolean isRunning() {
         return isRunning;
     }
+
+    public InetAddress getAddress() {
+        return socket != null ? socket.getInetAddress() : null;
+    }
+
+
 
 }
