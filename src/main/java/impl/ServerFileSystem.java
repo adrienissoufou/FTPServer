@@ -1,12 +1,17 @@
 package impl;
 
-import api.IFyleSystem;
+import api.IFileSystem;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Set;
 
-public class ServerFileSystem implements IFyleSystem<File> {
+public class ServerFileSystem implements IFileSystem<File> {
 
     private final File rootDir;
 
@@ -68,6 +73,38 @@ public class ServerFileSystem implements IFyleSystem<File> {
         }
 
         return file;
+    }
+
+    @Override
+    public String getPermission(File file) throws IOException {
+        Path path = Paths.get(String.valueOf(file));
+        Set<PosixFilePermission> set = Files.getPosixFilePermissions(path);
+        return PosixFilePermissions.toString(set);
+    }
+
+    @Override
+    public String getOwner(File file) {
+        return "alexeisevko";
+    }
+
+    @Override
+    public String getGroup(File file) {
+        return "-";
+    }
+
+    @Override
+    public long getSize(File file) {
+        return file.length();
+    }
+
+    @Override
+    public long getLastModified(File file) {
+        return file.lastModified();
+    }
+
+    @Override
+    public int getHardLinks(File file) {
+        return file.isDirectory() ? 3 : 1;
     }
 
     @Override

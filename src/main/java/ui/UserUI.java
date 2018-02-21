@@ -90,7 +90,7 @@ public class UserUI implements Initializable {
     private void runServer() {
         if (portIsValid()) {
             if (ftpServerInstance == null) {
-                ftpServerInstance = new FTPServer();
+                ftpServerInstance = new FTPServer(fileSystem);
                 new Thread(() -> ftpServerInstance.createServerState(Integer.parseInt(serverPort.getText()))).start();
             }else {
                 FxDialogs.showError("Error", "Server is already running");
@@ -102,7 +102,7 @@ public class UserUI implements Initializable {
 
     @FXML
     private Boolean portIsValid() {
-        Pattern portPattern = Pattern.compile("[0-9]{3,5}");
+        Pattern portPattern = Pattern.compile("[0-9]{1,5}");
         return portPattern.matcher(serverPort.getText()).matches();
     }
 

@@ -6,13 +6,8 @@ import api.iComand.Command;
 import api.iComand.NoArgsCommand;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.net.*;
+import java.util.*;
 
 public class FTPServer {
 
@@ -21,9 +16,11 @@ public class FTPServer {
     private final String ftpHome = "/Users/alexeisevko/Desktop/server";
     private ArrayList<FTPConnection> connections;
     private static volatile Boolean isRunning = false;
+    private ServerFileSystem fileSystem;
 
-    public FTPServer() {
+    public FTPServer(ServerFileSystem fileSystem) {
         this.connections = new ArrayList<>();
+        this.fileSystem = fileSystem;
     }
 
     public void createServerState(int port) {
@@ -39,7 +36,6 @@ public class FTPServer {
         acceptConnections();
     }
 
-
     private void acceptConnections() {
         while (true) {
             try {
@@ -53,6 +49,10 @@ public class FTPServer {
         }
     }
 
+
+    ServerFileSystem getFileSystem() {
+        return fileSystem;
+    }
 
     ServerSocket getSocket() {
         return socket;

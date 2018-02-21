@@ -5,7 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 
-public interface IFyleSystem<F extends Object> {
+public interface IFileSystem<F extends Object> {
 
     F getRoot();
 
@@ -22,6 +22,18 @@ public interface IFyleSystem<F extends Object> {
     ArrayList<F> listFiles(F dir) throws IOException;
 
     F findFile(F cwd, String path) throws IOException;
+
+    String getPermission(F file) throws IOException;
+
+    String getOwner(F file);
+
+    String getGroup(F file);
+
+    long getSize(F file);
+
+    long getLastModified(F file);
+
+    int getHardLinks(F file);
 
     InputStream readFile(F file, long start) throws IOException;
 

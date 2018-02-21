@@ -6,10 +6,10 @@ import api.iComand.ArgsArrayCommand;
 import api.iComand.Command;
 import api.iComand.NoArgsCommand;
 
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,9 +26,16 @@ public class FTPConnection implements Closeable, Runnable {
     private String clientIP;
     private ServerSocket passiveServer = null;
     private boolean responseSent = true;
+    private ServerFileSystem fileSystem;
+    private File cwd = null;
+    private String activeHost = null;
+    private int activePort = 0;
+    private boolean passive = false;
 
     FTPConnection(FTPServer server, Socket clientConnection) throws IOException {
         this.server = server;
+        this.fileSystem = server.getFileSystem();
+        this.cwd = fileSystem.getRoot();
         this.serverSocket = server.getSocket();
         this.clientConnection = clientConnection;
         this.clientIP = clientConnection.getInetAddress().toString().replace("/", "");
@@ -36,10 +43,21 @@ public class FTPConnection implements Closeable, Runnable {
         this.bufferedReader = new BufferedReader(new InputStreamReader(clientConnection.getInputStream()));
         this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(clientConnection.getOutputStream()));
         registerAllCommands();
+        //sendResponse(200, "OK");
+        sendResponse(220, "Service ready for new user");
     }
 
     private void registerAllCommands() {
         registerCommand("FEAT", this::feat);
+        registerCommand("USER", this::user);
+        registerCommand("PASV", this::pasv);
+        registerCommand("PWD", this::pwd);
+        registerCommand("CWD", this::cwd);
+        registerCommand("CDUP", this::cdup);
+        registerCommand("TYPE", this::type);
+        registerCommand("PORT", this::port);
+        registerCommand("LIST", this::list);
+        registerCommand("PASS", this::pass);
     }
 
     private void feat() {
@@ -50,6 +68,138 @@ public class FTPConnection implements Closeable, Runnable {
 
         sendResponse(211, list.toString());
         sendResponse(211, "End");
+    }
+
+    private void user(String username) {
+        //check users
+        //sendResponse(230, "User logged in, proceed");
+        sendResponse(331, "User name okay, need password.");
+    }
+
+    private void pass(String pass){
+        sendResponse(230, "User logged in, proceed");
+    }
+
+    private void pasv() throws IOException {
+        FTPServer server = this.server;
+        passiveServer = new ServerSocket(0, 5, server.getAddress());
+        passive = true;
+
+        String host = passiveServer.getInetAddress().getHostAddress();
+        int port = passiveServer.getLocalPort();
+
+
+        String[] addr = host.split("\\.");
+
+        String address = addr[0] + "," + addr[1] + "," + addr[2] + "," + addr[3];
+        String addressPort = port / 256 + "," + port % 256;
+
+        sendResponse(227, "Enabled Passive Mode (" + address + "," + addressPort + ")");
+    }
+
+    private File getFile(String path) throws IOException {
+        if(path.equals("...") || path.equals("..")) {
+            return fileSystem.getParent(cwd);
+        } else if(path.equals("/")) {
+            return fileSystem.getRoot();
+        } else if(path.startsWith("/")) {
+            return fileSystem.findFile(fileSystem.getRoot(), path.substring(1));
+        } else {
+            return fileSystem.findFile(cwd, path);
+        }
+    }
+
+    private void pwd() {
+        String path = "/" + fileSystem.getPath(cwd);
+        sendResponse(257, path + " CWD Name");
+    }
+
+    private void cwd(String path) throws IOException {
+        File dir = getFile(path);
+
+        if(fileSystem.isDirectory(dir)) {
+            cwd = dir;
+            sendResponse(250, "The working directory was changed");
+        } else {
+            sendResponse(550, "Not a valid directory");
+        }
+    }
+
+    private void cdup() throws IOException {
+        cwd = fileSystem.getParent(cwd);
+        sendResponse(200, "The working directory was changed");
+    }
+
+    private void type(String type) {
+        type = type.toUpperCase();
+        if (type.startsWith("I") || type.startsWith("A")) {
+            sendResponse(200, "Type set to " + type);
+        } else {
+            sendResponse(500, "Unknown type " + type);
+        }
+    }
+
+    private void port(String data) {
+        String[] args = data.split(",");
+
+        activeHost = args[0] + "." + args[1] + "." + args[2] + "." + args[3];
+        activePort = Integer.parseInt(args[4]) * 256 + Integer.parseInt(args[5]);
+        passive = false;
+
+        if(passiveServer != null) {
+            Utils.closeQuietly(passiveServer);
+            passiveServer = null;
+        }
+        sendResponse(200, "Enabled Active Mode");
+    }
+
+    private void list(String args[]) throws IOException {
+        sendResponse(150, "File status okay; about to open data connection.");
+
+        File dir = args.length > 0 && !args[0].equals("-a") ? getFile(args[0]) : cwd;
+
+        if(!fileSystem.isDirectory(dir)) {
+            sendResponse(550, "Not a directory");
+            return;
+        }
+
+        StringBuilder data = new StringBuilder();
+
+
+        for (File file: fileSystem.listFiles(dir)) {
+            data.append(Utils.format(fileSystem, file));
+            bufferedWriter.write(Utils.format(fileSystem, file));
+        }
+
+        sendData(String.valueOf(data).getBytes());
+        sendResponse(226, "Requested file action successful");
+    }
+
+    private void sendData(byte[] data) throws ResponseException {
+        if (clientConnection.isClosed()) return;
+
+        Socket socket;
+        try {
+            socket = createDataSocket();
+            OutputStream out = socket.getOutputStream();
+
+            out.write(data, 0, data.length);
+
+
+            out.flush();
+        } catch (IOException e) {
+            throw new ResponseException(425, "An error occurred while transferring the data");
+        }
+
+
+    }
+
+    private Socket createDataSocket() throws IOException {
+        if(passive && passiveServer != null) {
+            return passiveServer.accept();
+        } else {
+            return new Socket(activeHost, activePort);
+        }
     }
 
     public void registerCommand(String label, Command cmd) { addCommand(label, cmd) ; }
@@ -65,51 +215,6 @@ public class FTPConnection implements Closeable, Runnable {
     private void addCommand(String label, Command cmd) {
         commands.put(label.toUpperCase(), cmd);
     }
-
-//    private void handleConnection() throws IOException{
-//        bufferedWriter.println("220 - connected to server\r\n");
-//        String command;
-//        while (server.isRunning()) {
-//            command = bufferedReader.readLine();
-//            Logger.setLogData(command);
-//            switch (commandParser(command)) {
-//                case "USER":
-//                    bufferedWriter.println("230 - user logged in\r\n");
-//                    break;
-//                case "PASV":
-//                    bufferedWriter.println("230 - user logged in\r\n");
-//                    break;
-//                case "PWD":
-//                    bufferedWriter.println("257 - \"/server\" current\r\n");
-//                    break;
-//                case "FEAT":
-//                    bufferedWriter.println("211 - Features\r\n");
-//                    bufferedWriter.println("UTF8\r\n");
-//                    bufferedWriter.println("211 - End\r\n");
-//                    break;
-//                case "TYPE":
-//                    bufferedWriter.println("200 - A\r\n");
-//                    break;
-//                case "PORT":
-//                    FTPServer server = this.server;
-//                    passiveServer = new ServerSocket(0, 5, server.getAddress());
-//
-//                    String host = passiveServer.getInetAddress().getHostAddress();
-//                    int port = passiveServer.getLocalPort();
-//                    String[] addr = host.split("\\.");
-//
-//                    String address = addr[0] + "," + addr[1] + "," + addr[2] + "," + addr[3];
-//                    String addressPort = port / 256 + "," + port % 256;
-//                    bufferedWriter.println("227 - Enabled Passive Mode (" + address + "," + addressPort + ")\r\n");
-//                    break;
-//                case "LIST":
-//                    bufferedWriter.println("150 - Sending list of files\r\n");
-//                    bufferedWriter.println("\"/server/README.rtf\"\r\n");
-//                    bufferedWriter.println("226 - List of files was sent\r\n");
-//                    break;
-//            }
-//        }
-//    }
 
     void update() {
         String line;
@@ -132,6 +237,7 @@ public class FTPConnection implements Closeable, Runnable {
     }
 
     void process(String cmd) {
+        Logger.setLogData(cmd);
         int firstSpace = cmd.indexOf(' ');
         if(firstSpace < 0) firstSpace = cmd.length();
 
