@@ -11,19 +11,18 @@ import java.util.*;
 
 public class FTPServer {
 
-    private int port;
+
+    private final List<FTPConnection> connections = Collections.synchronizedList(new ArrayList<FTPConnection>());
+
     private ServerSocket socket = null;
-    private ArrayList<FTPConnection> connections;
     private static volatile Boolean isRunning = false;
     private ServerFileSystem fileSystem;
 
     public FTPServer(ServerFileSystem fileSystem) {
-        this.connections = new ArrayList<>();
         this.fileSystem = fileSystem;
     }
 
     public void createServerState(int port) {
-        this.port = port;
         try {
             socket = new ServerSocket(port, 50, InetAddress.getLocalHost());
             isRunning = true;
@@ -40,7 +39,9 @@ public class FTPServer {
             try {
                 Socket clientConnection = socket.accept();
                 FTPConnection ftpConnection = new FTPConnection(this, clientConnection);
-                connections.add(ftpConnection);
+                synchronized(connections) {
+                    connections.add(ftpConnection);
+                }
                 new Thread(ftpConnection).start();
             } catch (IOException e) {
                 System.err.print("FTP error: " + e.getMessage());
@@ -48,27 +49,40 @@ public class FTPServer {
         }
     }
 
+    public void dispose() {
+        if(!Thread.currentThread().isInterrupted()) {
+            Thread.currentThread().interrupt();
+        }
+
+        synchronized(connections) {
+            for(FTPConnection con : connections) {
+                try {
+                    con.close();
+                } catch(Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+            connections.clear();
+        }
+
+        Logger.setLogData("Server stopped.");
+    }
+
     protected void removeConnection(FTPConnection connection) {
         connections.remove(connection);
     }
 
-
-    ServerFileSystem getFileSystem() {
+    public ServerFileSystem getFileSystem() {
         return fileSystem;
     }
 
-    ServerSocket getSocket() {
-        return socket;
-    }
-
-    Boolean isRunning() {
-        return isRunning;
-    }
 
     public InetAddress getAddress() {
         return socket != null ? socket.getInetAddress() : null;
     }
 
 
-
+    public static Boolean getIsRunning() {
+        return isRunning;
+    }
 }

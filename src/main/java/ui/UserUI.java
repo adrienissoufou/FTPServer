@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.ResourceBundle;
 import java.util.regex.Pattern;
 
+
 public class UserUI implements Initializable {
 
     private FTPServer ftpServerInstance;
@@ -35,7 +36,13 @@ public class UserUI implements Initializable {
     private Button startButton;
 
     @FXML
+    private Button stopButton;
+
+    @FXML
     private TextField serverPort;
+
+    @FXML
+    private ChoiceBox<String> clients;
 
 
     static private  String homeDir = "/Users/alexeisevko/Desktop/server";
@@ -84,6 +91,7 @@ public class UserUI implements Initializable {
             e.printStackTrace();
         }
         log.textProperty().bind(Logger.logDataProperty());
+
     }
 
     @FXML
@@ -100,10 +108,19 @@ public class UserUI implements Initializable {
         }
     }
 
-    @FXML
     private Boolean portIsValid() {
         Pattern portPattern = Pattern.compile("[0-9]{1,5}");
         return portPattern.matcher(serverPort.getText()).matches();
+    }
+
+    @FXML
+    private void stopServer() {
+        if (FTPServer.getIsRunning()) {
+            ftpServerInstance.dispose();
+            ftpServerInstance = null;
+        } else {
+            FxDialogs.showError("Error", "Server is not running");
+        }
     }
 
 }

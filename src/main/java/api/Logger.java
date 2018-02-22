@@ -14,5 +14,7 @@ public final class Logger {
         wholeLog.append(LocalTime.now()).append(" - ").append(data).append("\n");
         logData.set(wholeLog.toString());
     }
-    public static String getLogData() { return logData.get(); }
+    public static void clearLogData() {
+        wholeLog = new StringBuffer();
+    }
 }
