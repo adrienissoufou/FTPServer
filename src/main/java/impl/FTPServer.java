@@ -13,7 +13,6 @@ public class FTPServer {
 
     private int port;
     private ServerSocket socket = null;
-    private final String ftpHome = "/Users/alexeisevko/Desktop/server";
     private ArrayList<FTPConnection> connections;
     private static volatile Boolean isRunning = false;
     private ServerFileSystem fileSystem;
@@ -47,6 +46,10 @@ public class FTPServer {
                 System.err.print("FTP error: " + e.getMessage());
             }
         }
+    }
+
+    protected void removeConnection(FTPConnection connection) {
+        connections.remove(connection);
     }
 
 

@@ -10,6 +10,8 @@ import api.iComand.NoArgsCommand;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,6 +33,8 @@ public class FTPConnection implements Closeable, Runnable {
     private String activeHost = null;
     private int activePort = 0;
     private boolean passive = false;
+    private boolean ascii = false;
+    private File rnFile;
 
     FTPConnection(FTPServer server, Socket clientConnection) throws IOException {
         this.server = server;
@@ -43,7 +47,6 @@ public class FTPConnection implements Closeable, Runnable {
         this.bufferedReader = new BufferedReader(new InputStreamReader(clientConnection.getInputStream()));
         this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(clientConnection.getOutputStream()));
         registerAllCommands();
-        //sendResponse(200, "OK");
         sendResponse(220, "Service ready for new user");
     }
 
@@ -58,6 +61,16 @@ public class FTPConnection implements Closeable, Runnable {
         registerCommand("PORT", this::port);
         registerCommand("LIST", this::list);
         registerCommand("PASS", this::pass);
+        registerCommand("MKD", this::mkd);
+        registerCommand("RMD", this::rmd);
+        registerCommand("DELE", this::dele);
+        registerCommand("RNFR", this::rnfr);
+        registerCommand("RNTO", this::rnto);
+        registerCommand("ABOR", this::abor);
+        registerCommand("APPE", this::appe);
+        registerCommand("STOR", this::stor);
+        registerCommand("RETR", this::retr);
+        registerCommand("QUIT", this::quit);
     }
 
     private void feat() {
@@ -110,7 +123,7 @@ public class FTPConnection implements Closeable, Runnable {
     }
 
     private void pwd() {
-        String path = "/" + fileSystem.getPath(cwd);
+        String path = cwd == fileSystem.getRoot() ? "/" + fileSystem.getRoot().getName() :"/" + fileSystem.getPath(cwd);
         sendResponse(257, path + " CWD Name");
     }
 
@@ -130,13 +143,182 @@ public class FTPConnection implements Closeable, Runnable {
         sendResponse(200, "The working directory was changed");
     }
 
+    private void mkd(String path) throws IOException {
+        File file = getFile(path);
+
+        fileSystem.mkdirs(file);
+        sendResponse(257, '"' + path + '"' + " Directory Created");
+    }
+
+    private void rmd(String path) throws IOException {
+        File file = getFile(path);
+
+        if(!fileSystem.isDirectory(file)) {
+            sendResponse(550, "Not a directory");
+            return;
+        }
+
+        fileSystem.delete(file);
+        sendResponse(250, '"' + path + '"' + " Directory Deleted");
+    }
+
+    private void dele(String path) throws IOException {
+        File file = getFile(path);
+
+        if(fileSystem.isDirectory(file)) {
+            sendResponse(550, "Not a file");
+            return;
+        }
+
+        fileSystem.delete(file);
+        sendResponse(250, '"' + path + '"' + " File Deleted");
+    }
+
+    private void rnfr(String path) throws IOException {
+        rnFile = getFile(path);
+        sendResponse(350, "Rename request received");
+    }
+
+    private void rnto(String path) throws IOException {
+        if(rnFile == null) {
+            sendResponse(503, "No rename request was received");
+            return;
+        }
+
+        fileSystem.rename(rnFile, getFile(path));
+        rnFile = null;
+
+        sendResponse(250, "File successfully renamed");
+    }
+
+    private void abor() throws IOException {
+        abortDataTransfers();
+        sendResponse(226, "All transfers were aborted successfully");
+    }
+
+    public void abortDataTransfers() {
+        //protected final
+        ArrayDeque<Socket> dataConnections = new ArrayDeque<>();
+        while(!dataConnections.isEmpty()) {
+            Socket socket = dataConnections.poll();
+            if(socket != null) Utils.closeQuietly(socket);
+        }
+    }
+
+    private void appe(String path) throws IOException {
+        File file = getFile(path);
+
+        sendResponse(150, "Receiving a file stream for " + path);
+        receiveStream(fileSystem.writeFile(file, fileSystem.exists(file) ? fileSystem.getSize(file) : 0));
+    }
+
+    private void stor(String path) throws IOException {
+        File file = getFile(path);
+
+        sendResponse(150, "Receiving a file stream for " + path);
+
+        receiveStream(fileSystem.writeFile(file, 0));
+    }
+
+    private void retr(String path) throws IOException {
+        File file = getFile(path);
+
+        sendResponse(150, "Sending the file stream for " + path + " (" + fileSystem.getSize(file) + " bytes)");
+        sendStream(Utils.readFileSystem(fileSystem, file, 0, ascii));
+    }
+
+    private void sendStream(InputStream in) {
+        new Thread(() -> {
+            try {
+                sendData(in);
+                sendResponse(226, "File sent!");
+            } catch(ResponseException ex) {
+                sendResponse(ex.getCode(), ex.getMessage());
+            } catch(Exception ex) {
+                sendResponse(451, ex.getMessage());
+            }
+        }).start();
+    }
+
+    private void sendData(InputStream in) throws ResponseException {
+        if(clientConnection.isClosed()) return;
+
+        Socket socket;
+        try {
+            socket = createDataSocket();
+            OutputStream out = socket.getOutputStream();
+
+            byte[] buffer = new byte[1024];
+            int len;
+            while((len = in.read(buffer)) != -1) {
+                Utils.write(out, buffer, len, ascii);
+            }
+
+            out.flush();
+            Utils.closeQuietly(out);
+            Utils.closeQuietly(in);
+            Utils.closeQuietly(socket);
+        } catch(SocketException ex) {
+            throw new ResponseException(426, "Transfer aborted");
+        } catch(IOException ex) {
+            throw new ResponseException(425, "An error occurred while transferring the data");
+        }
+    }
+
+    private void receiveStream(OutputStream out) {
+        new Thread(() -> {
+            try {
+                receiveData(out);
+                sendResponse(226, "File received!");
+            } catch(ResponseException ex) {
+                sendResponse(ex.getCode(), ex.getMessage());
+            } catch(Exception ex) {
+                sendResponse(451, ex.getMessage());
+            }
+        }).start();
+    }
+
+    private void receiveData(OutputStream out) throws ResponseException {
+        if(clientConnection.isClosed()) return;
+
+        Socket socket;
+        try {
+            socket = createDataSocket();
+            InputStream in = socket.getInputStream();
+
+            byte[] buffer = new byte[1024];
+            int len;
+            while((len = in.read(buffer)) != -1) {
+                out.write(buffer, 0, len);
+            }
+
+            out.flush();
+            Utils.closeQuietly(out);
+            Utils.closeQuietly(in);
+            Utils.closeQuietly(socket);
+        } catch(SocketException ex) {
+            throw new ResponseException(426, "Transfer aborted");
+        } catch(IOException ex) {
+            throw new ResponseException(425, "An error occurred while transferring the data");
+        }
+    }
+
     private void type(String type) {
         type = type.toUpperCase();
-        if (type.startsWith("I") || type.startsWith("A")) {
+        if (type.startsWith("A")) {
+            ascii = true;
+            sendResponse(200, "Type set to " + type);
+        } else if (type.startsWith("I") ) {
+            ascii = false;
             sendResponse(200, "Type set to " + type);
         } else {
             sendResponse(500, "Unknown type " + type);
         }
+    }
+
+    private void quit() {
+        sendResponse(221, "Closing connection...");
+        //stop = true;
     }
 
     private void port(String data) {
@@ -168,10 +350,9 @@ public class FTPConnection implements Closeable, Runnable {
 
         for (File file: fileSystem.listFiles(dir)) {
             data.append(Utils.format(fileSystem, file));
-            bufferedWriter.write(Utils.format(fileSystem, file));
         }
 
-        sendData(String.valueOf(data).getBytes());
+        sendData(String.valueOf(data).getBytes("UTF-8"));
         sendResponse(226, "Requested file action successful");
     }
 
@@ -183,10 +364,12 @@ public class FTPConnection implements Closeable, Runnable {
             socket = createDataSocket();
             OutputStream out = socket.getOutputStream();
 
-            out.write(data, 0, data.length);
-
+            Utils.write(out, data, data.length, ascii);
 
             out.flush();
+
+            Utils.closeQuietly(out);
+            Utils.closeQuietly(socket);
         } catch (IOException e) {
             throw new ResponseException(425, "An error occurred while transferring the data");
         }
@@ -202,13 +385,13 @@ public class FTPConnection implements Closeable, Runnable {
         }
     }
 
-    public void registerCommand(String label, Command cmd) { addCommand(label, cmd) ; }
+    private void registerCommand(String label, Command cmd) { addCommand(label, cmd) ; }
 
-    public void registerCommand(String label, NoArgsCommand cmd) {
+    private void registerCommand(String label, NoArgsCommand cmd) {
         addCommand(label, cmd);
     }
 
-    public void registerCommand(String label, ArgsArrayCommand cmd) {
+    private void registerCommand(String label, ArgsArrayCommand cmd) {
         addCommand(label, cmd);
     }
 
@@ -216,7 +399,7 @@ public class FTPConnection implements Closeable, Runnable {
         commands.put(label.toUpperCase(), cmd);
     }
 
-    void update() {
+    private void update() {
         String line;
 
         try {
@@ -236,7 +419,7 @@ public class FTPConnection implements Closeable, Runnable {
         process(line);
     }
 
-    void process(String cmd) {
+    private void process(String cmd) {
         Logger.setLogData(cmd);
         int firstSpace = cmd.indexOf(' ');
         if(firstSpace < 0) firstSpace = cmd.length();
@@ -249,10 +432,6 @@ public class FTPConnection implements Closeable, Runnable {
         }
 
         processCommand(command, cmd, firstSpace != cmd.length() ? cmd.substring(firstSpace + 1) : "");
-    }
-
-    private String commandParser(String command) {
-        return command.split("\\s+")[0];
     }
 
     void processCommand(Command cmd, String name, String args) {
@@ -296,9 +475,22 @@ public class FTPConnection implements Closeable, Runnable {
         responseSent = true;
     }
 
+    private void onDisconnected() {
+        if(passiveServer != null) {
+            Utils.closeQuietly(passiveServer);
+            passiveServer = null;
+        }
+    }
+
     @Override
     public void close() throws IOException {
-        close();
+        if (!Thread.currentThread().isInterrupted()) {
+            Thread.currentThread().interrupt();
+        }
+        onDisconnected();
+
+        clientConnection.close();
+        server.removeConnection(this);
     }
 
     @Override
