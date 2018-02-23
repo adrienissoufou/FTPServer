@@ -1,12 +1,10 @@
 package impl;
 
 import api.Logger;
-import api.iComand.ArgsArrayCommand;
-import api.iComand.Command;
-import api.iComand.NoArgsCommand;
 
 import java.io.IOException;
 import java.net.*;
+import java.sql.SQLException;
 import java.util.*;
 
 public class FTPServer {
@@ -20,7 +18,19 @@ public class FTPServer {
 
     public FTPServer(ServerFileSystem fileSystem) {
         this.fileSystem = fileSystem;
+        try {
+            DataBase.init();
+        } catch (ClassNotFoundException | SQLException e) {
+            e.printStackTrace();
+        }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try { DataBase.getStmt().close(); } catch(SQLException se) { /*can't do anything */ }
+            try { DataBase.getCon().close(); } catch(SQLException se) { /*can't do anything */ }
+            try { DataBase.getRs().close(); } catch(SQLException se) { /*can't do anything */ }
+        }));
     }
+
+
 
     public void createServerState(int port) {
         try {
@@ -50,6 +60,7 @@ public class FTPServer {
     }
 
     public void dispose() {
+
         if(!Thread.currentThread().isInterrupted()) {
             Thread.currentThread().interrupt();
         }

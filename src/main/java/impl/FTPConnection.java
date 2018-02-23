@@ -13,6 +13,7 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
@@ -236,6 +237,7 @@ public class FTPConnection implements Closeable, Runnable {
             sendResponse(451, ex.getMessage());
             ex.printStackTrace();
         }
+
 
         if(!responseSent) sendResponse(200, "Done");
     }

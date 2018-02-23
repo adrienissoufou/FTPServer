@@ -1,5 +1,7 @@
 package impl.handlers;
 
+import extensions.Encoder;
+import impl.DataBase;
 import impl.FTPConnection;
 import impl.FTPServer;
 import impl.Utils;
@@ -7,6 +9,8 @@ import impl.Utils;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
+import java.util.regex.Pattern;
 
 public class ConnectionHandler {
 
@@ -16,8 +20,8 @@ public class ConnectionHandler {
     private ServerSocket passiveServer = null;
     private String activeHost = null;
     private int activePort = 0;
+    private String username;
 
-    private boolean ascii = true;
     private boolean stop = false;
 
 
@@ -27,10 +31,6 @@ public class ConnectionHandler {
 
     public boolean shouldStop() {
         return stop;
-    }
-
-    public boolean isAsciiMode() {
-        return ascii;
     }
 
     public Socket createDataSocket() throws IOException {
@@ -56,14 +56,36 @@ public class ConnectionHandler {
         connection.registerCommand("QUIT", this::quit);
     }
 
-    private void user(String username) {
-        //check users
-        //sendResponse(230, "User logged in, proceed");
-        connection.sendResponse(331, "User name okay, need password.");
+    private void user(String username) throws IOException, SQLException {
+        this.username = username;
+
+        if (validFormat(username)) {
+            connection.sendResponse(501,  "Syntax error in parameters or arguments.");
+            return;
+        }
+
+        if (DataBase.userExists(username)) {
+            connection.sendResponse(331, "User name okay, need password.");
+        }
+        else  {
+            connection.sendResponse(530, "Authentication failed.");
+            connection.close();
+        }
     }
 
-    private void pass(String pass){
-        connection.sendResponse(230, "User logged in, proceed");
+    private void pass(String pass) throws IOException, SQLException {
+        if (validFormat(pass)) {
+            connection.sendResponse(501,  "Syntax error in parameters or arguments.");
+            return;
+        }
+
+        if (DataBase.userPasswordCorrect(username, pass)) {
+            connection.sendResponse(230, "User logged in, proceed.");
+        }
+        else  {
+            connection.sendResponse(530, "Authentication failed.");
+            connection.close();
+        }
     }
 
     private void pasv() throws IOException {
@@ -100,6 +122,11 @@ public class ConnectionHandler {
             passiveServer = null;
         }
         connection.sendResponse(200, "Enabled Active Mode");
+    }
+
+    private boolean validFormat(String str) {
+        Pattern pattern = Pattern.compile("[^\\r\\n]+");
+        return !pattern.matcher(str).matches();
     }
 
 }
