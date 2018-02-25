@@ -79,7 +79,8 @@ public class ServerFileSystem implements IFileSystem<File> {
     public String getPermission(File file) throws IOException {
         Path path = Paths.get(String.valueOf(file));
         Set<PosixFilePermission> set = Files.getPosixFilePermissions(path);
-        return PosixFilePermissions.toString(set);
+        String permissions = isDirectory(file) ? "d" : "-";
+        return permissions + PosixFilePermissions.toString(set);
     }
 
     @Override

@@ -22,13 +22,4 @@ public final class Logger {
         log = textArea;
     }
 
-
-/*    private static StringProperty logData = new SimpleStringProperty();
-    private static StringBuffer wholeLog = new StringBuffer();
-
-    public static StringProperty logDataProperty() { return logData; }
-    public static void setLogData(String data) {
-        wholeLog.append(LocalTime.now()).append(" - ").append(data).append("\n");
-        logData.set(wholeLog.toString());
-    }*/
 }

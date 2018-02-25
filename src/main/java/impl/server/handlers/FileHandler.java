@@ -133,7 +133,7 @@ public class FileHandler {
         connection.sendResponse(250, "File successfully renamed");
     }
 
-    private void abor() throws IOException {
+    private void abor() {
         connection.abortDataTransfers();
         connection.sendResponse(226, "All transfers were aborted successfully");
     }

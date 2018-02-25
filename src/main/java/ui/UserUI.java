@@ -2,8 +2,6 @@ package ui;
 
 import api.Event;
 import api.observer.IFileSystemObserver;
-import api.observer.ILogObserver;
-import api.observer.IObserver;
 import extensions.FxDialogs;
 import impl.ObserverNotificator;
 import impl.server.FTPServer;
