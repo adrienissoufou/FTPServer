@@ -1,10 +1,13 @@
-package impl.handlers;
+package impl.server.handlers;
 
+import api.Event;
 import api.ResponseException;
-import impl.FTPConnection;
-import impl.ServerFileSystem;
+import impl.ObserverNotificator;
+import impl.server.FTPConnection;
+import impl.server.ServerFileSystem;
 import impl.Utils;
 
+import javax.management.Notification;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,10 +22,13 @@ public class FileHandler {
 
     private File rnFile = null;
 
+    private ObserverNotificator notificator;
+
     public FileHandler(FTPConnection connection) {
         this.connection = connection;
         this.fileSystem = connection.getServer().getFileSystem();
         this.cwd = fileSystem.getRoot();
+        notificator = ObserverNotificator.getInstance();
     }
 
     public void registerCommands() {
@@ -55,7 +61,8 @@ public class FileHandler {
     }
 
     private void pwd() {
-        String path = cwd == fileSystem.getRoot() ? "/" + fileSystem.getRoot().getName() :"/" + fileSystem.getPath(cwd);
+//        String path = cwd == fileSystem.getRoot() ? "/" + fileSystem.getRoot().getName() :"/" + fileSystem.getPath(cwd);
+        String path = "/" + fileSystem.getPath(cwd);
         connection.sendResponse(257, path + " CWD Name");
     }
 
@@ -79,6 +86,7 @@ public class FileHandler {
         File file = getFile(path);
 
         fileSystem.mkdirs(file);
+        notificator.fire(Event.FS);
         connection.sendResponse(257, '"' + path + '"' + " Directory Created");
     }
 
@@ -91,6 +99,7 @@ public class FileHandler {
         }
 
         fileSystem.delete(file);
+        notificator.fire(Event.FS);
         connection.sendResponse(250, '"' + path + '"' + " Directory Deleted");
     }
 
@@ -103,6 +112,7 @@ public class FileHandler {
         }
 
         fileSystem.delete(file);
+        notificator.fire(Event.FS);
         connection.sendResponse(250, '"' + path + '"' + " File Deleted");
     }
 
@@ -119,7 +129,7 @@ public class FileHandler {
 
         fileSystem.rename(rnFile, getFile(path));
         rnFile = null;
-
+        ObserverNotificator.getInstance().fire(Event.FS);
         connection.sendResponse(250, "File successfully renamed");
     }
 
@@ -133,6 +143,7 @@ public class FileHandler {
 
         connection.sendResponse(150, "Receiving a file stream for " + path);
         receiveStream(fileSystem.writeFile(file, fileSystem.exists(file) ? fileSystem.getSize(file) : 0));
+        notificator.fire(Event.FS);
     }
 
     private void stor(String path) throws IOException {
@@ -141,6 +152,7 @@ public class FileHandler {
         connection.sendResponse(150, "Receiving a file stream for " + path);
 
         receiveStream(fileSystem.writeFile(file, 0));
+        notificator.fire(Event.FS);
     }
 
     private void retr(String path) throws IOException {

@@ -1,9 +1,8 @@
-package impl.handlers;
+package impl.server.handlers;
 
-import extensions.Encoder;
-import impl.DataBase;
-import impl.FTPConnection;
-import impl.FTPServer;
+import impl.server.DataBase;
+import impl.server.FTPConnection;
+import impl.server.FTPServer;
 import impl.Utils;
 
 import java.io.IOException;

@@ -22,9 +22,6 @@
       <Button fx:id="startButton" layoutX="467.0" layoutY="23.0" mnemonicParsing="false" onAction="#runServer" prefHeight="27.0" prefWidth="63.0" text="Start" />
       <Button fx:id="stopButton" layoutX="530.0" layoutY="23.0" mnemonicParsing="false" onAction="#stopServer" prefHeight="27.0" prefWidth="63.0" text="Stop" />
       <TextField fx:id="serverPort" layoutX="300.0" layoutY="23.0" />
-      <ChoiceBox fx:id="clients" layoutX="14.0" layoutY="23.0" prefWidth="150.0" />
-      <Button layoutX="164.0" layoutY="23.0" mnemonicParsing="false" text="Disconnect" />
-      <Label layoutX="14.0" layoutY="6.0" text="Clients" />
       <Label layoutX="300.0" layoutY="6.0" text="Port" />
       <Label layoutX="14.0" layoutY="63.0" text="Data" />
       <Label layoutX="227.0" layoutY="63.0" text="Logs" />

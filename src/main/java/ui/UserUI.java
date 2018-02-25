@@ -1,8 +1,14 @@
 package ui;
 
+import api.Event;
+import api.observer.IFileSystemObserver;
+import api.observer.ILogObserver;
+import api.observer.IObserver;
 import extensions.FxDialogs;
-import impl.FTPServer;
-import impl.ServerFileSystem;
+import impl.ObserverNotificator;
+import impl.server.FTPServer;
+import impl.server.ServerFileSystem;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 
@@ -18,7 +24,7 @@ import java.util.ResourceBundle;
 import java.util.regex.Pattern;
 
 
-public class UserUI implements Initializable {
+public class UserUI implements Initializable, IFileSystemObserver {
 
     private FTPServer ftpServerInstance;
     private ServerFileSystem fileSystem;
@@ -27,22 +33,10 @@ public class UserUI implements Initializable {
     private TreeView<String> treeView;
 
     @FXML
-    private TabPane tabbedLog;
-
-    @FXML
     private TextArea log;
 
     @FXML
-    private Button startButton;
-
-    @FXML
-    private Button stopButton;
-
-    @FXML
     private TextField serverPort;
-
-    @FXML
-    private ChoiceBox<String> clients;
 
 
     static private  String homeDir = "/Users/alexeisevko/Desktop/server";
@@ -90,8 +84,8 @@ public class UserUI implements Initializable {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        log.textProperty().bind(Logger.logDataProperty());
-
+        Logger.registerLog(this.log);
+        ObserverNotificator.getInstance().addObserver(Event.FS, this);
     }
 
     @FXML
@@ -123,4 +117,14 @@ public class UserUI implements Initializable {
         }
     }
 
+    @Override
+    public void updateState() {
+        Platform.runLater(() -> {
+            try {
+                displayTreeView();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+    }
 }
